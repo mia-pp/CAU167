@@ -9,6 +9,7 @@ def should_display_log_line(line: str) -> bool:
     """
     UI 로그창에 보여줄 핵심 로그만 통과
     """
+    # UI에 보여줄 로그 키워드
     include_keywords = [
         "라이센스 확인",
         "downloaded",
@@ -27,6 +28,7 @@ def should_display_log_line(line: str) -> bool:
         "시트 메타 조회",
     ]
 
+    # 불필요한 라이브러리 로그/스택 정보는 제외
     exclude_keywords = [
         "FutureWarning",
         "google.auth",
@@ -52,15 +54,18 @@ def normalize_log_line(line: str) -> str:
     """
     cleaned = line.strip()
 
+    # 인코딩 깨짐 대응
     if "���̼��� Ȯ��" in cleaned:
         return "라이센스 확인"
 
+    # CSV 다운로드 완료 로그 변환
     if "downloaded" in cleaned and "OK[DATE=" in cleaned:
         date_text = extract_date(cleaned)
         if date_text:
             return f"{date_text} CSV 다운로드 완료"
         return cleaned
 
+    # CSV 파싱 완료 로그 변환
     if "parsed_rows=" in cleaned and "OK[DATE=" in cleaned:
         date_text = extract_date(cleaned)
         parsed_rows = extract_value_after_keyword(cleaned, "parsed_rows=")
@@ -68,18 +73,21 @@ def normalize_log_line(line: str) -> str:
             return f"{date_text} CSV 파싱 완료 ({parsed_rows}건)"
         return cleaned
 
+    # 시트 생성 로그 변환
     if "SHEET_CREATED" in cleaned:
         sheet_name = extract_value_in_brackets(cleaned, "NAME")
         if sheet_name:
             return f"{sheet_name} 시트 생성 완료"
         return cleaned
 
+    # 기존 시트 재사용 로그 변환
     if "SHEET_EXISTS" in cleaned:
         sheet_name = extract_value_in_brackets(cleaned, "NAME")
         if sheet_name:
             return f"{sheet_name} 기존 시트 사용"
         return cleaned
 
+    # 시트 값 비움 로그 변환
     if "SHEET_CLEARED" in cleaned:
         sheet_name = extract_value_in_brackets(cleaned, "NAME")
         cleared_rows = extract_value_after_keyword(cleaned, "cleared_rows=")
@@ -87,6 +95,7 @@ def normalize_log_line(line: str) -> str:
             return f"{sheet_name} 값 비움 {cleared_rows}행"
         return cleaned
 
+    # 빈 행 정리 로그 변환
     if "SHEET_COMPACTED" in cleaned:
         sheet_name = extract_value_in_brackets(cleaned, "NAME")
         compacted_rows = extract_value_after_keyword(cleaned, "removed_blank_rows=")
@@ -94,6 +103,7 @@ def normalize_log_line(line: str) -> str:
             return f"{sheet_name} 빈행 정리 {compacted_rows}행"
         return cleaned
 
+    # 기존 데이터 삭제 로그 변환
     if "SHEET_TRUNCATED" in cleaned:
         sheet_name = extract_value_in_brackets(cleaned, "NAME")
         deleted_rows = extract_value_after_keyword(cleaned, "deleted_rows=")
@@ -101,6 +111,7 @@ def normalize_log_line(line: str) -> str:
             return f"{sheet_name} 기존 데이터 삭제 {deleted_rows}행"
         return cleaned
 
+    # 시트 적재 완료 로그 변환
     if "SHEET_WRITE_OK" in cleaned:
         sheet_name = extract_value_in_brackets(cleaned, "NAME")
         written_rows = extract_value_after_keyword(cleaned, "written_rows=")
@@ -108,6 +119,7 @@ def normalize_log_line(line: str) -> str:
             return f"{sheet_name} 시트 적재 완료 {written_rows}행"
         return cleaned
 
+    # 전체 처리 결과 로그 변환
     if "DONE success_count=" in cleaned:
         success_count = extract_value_after_keyword(cleaned, "DONE success_count=")
         fail_count = extract_value_after_keyword(cleaned, "fail_count=")
@@ -115,6 +127,7 @@ def normalize_log_line(line: str) -> str:
             return f"완료: 성공 {success_count}건 / 실패 {fail_count}건"
         return cleaned
 
+    # 사용자에게 바로 보여주기 좋은 에러 문구로 변환
     if "exceeds grid limits" in cleaned:
         return "시트 쓰기 실패: 시트 row 수 부족 (grid limits 초과)"
 
@@ -125,6 +138,7 @@ def normalize_log_line(line: str) -> str:
 
 
 def extract_date(text: str):
+    # OK[DATE=YYYY-MM-DD] 형식에서 날짜만 추출
     marker = "OK[DATE="
     if marker not in text:
         return None
@@ -137,6 +151,7 @@ def extract_date(text: str):
 
 
 def extract_value_after_keyword(text: str, keyword: str):
+    # 특정 키워드 뒤에 오는 값을 추출
     if keyword not in text:
         return None
 
@@ -151,6 +166,7 @@ def extract_value_after_keyword(text: str, keyword: str):
 
 
 def extract_value_in_brackets(text: str, key: str):
+    # [KEY=value] 형식에서 value만 추출
     marker = f"{key}="
     if marker not in text:
         return None

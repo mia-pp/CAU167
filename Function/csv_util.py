@@ -27,6 +27,7 @@ ALLOWED_FIRST_HEADERS = {"", "No"}
 
 
 def parse_keyword_report_csv(file_path: Path, report_date: str) -> Tuple[List[List[Any]], Dict[str, Any]]:
+    # 인코딩 후보를 순서대로 시도
     last_error: Optional[Exception] = None
 
     for enc in ENCODING_CANDIDATES:
@@ -58,12 +59,15 @@ def _parse_with_encoding(
     with file_path.open("r", encoding=encoding, newline="") as f:
         reader = csv.reader(f)
 
+        # 첫 행은 헤더
         header = next(reader, None)
         if not header:
             raise ValueError("empty csv header")
 
+        # BOM 제거 및 공백 정리
         normalized_header = [str(col).replace("\ufeff", "").strip() for col in header]
 
+        # 헤더가 예상과 다르면 경고만 남기고 계속 진행
         if not _is_expected_header(normalized_header):
             warnings.append(f"unexpected_header={normalized_header}")
 
@@ -71,10 +75,14 @@ def _parse_with_encoding(
             if not r:
                 continue
 
+            # 최소 8개 컬럼이 없으면 비정상 행으로 건너뜀
             if len(r) < 8:
                 skipped_invalid_rows += 1
                 continue
 
+            # CSV A열(No) 제거
+            # CSV D열(name) 제거
+            # 구글시트 A열에는 report_date 삽입
             out = [
                 report_date,
                 r[1],

@@ -15,23 +15,28 @@ from typing import Iterator
 
 
 def parse_yyyy_mm_dd(s: str) -> date:
+    # YYYY-MM-DD 문자열을 date 객체로 변환
     return datetime.strptime(s, "%Y-%m-%d").date()
 
 
 def validate_date_range(start_date: date, end_date: date) -> None:
     today = date.today()
 
+    # 시작일이 종료일보다 뒤면 비정상 입력
     if start_date > end_date:
         raise ValueError("시작일이 종료일보다 큽니다.")
 
+    # 종료일은 오늘 이전, 즉 실행일 전날까지만 허용
     if end_date >= today:
         raise ValueError("취합 종료일은 실행일 전날까지만 가능합니다.")
 
+    # 1년 이상 기간 요청 차단
     if (end_date - start_date).days >= 365:
         raise ValueError("기간이 너무 깁니다. (1년 이상은 차단)")
 
 
 def daterange(start_date: date, end_date: date) -> Iterator[date]:
+    # 시작일부터 종료일까지 하루씩 반환
     cur = start_date
     while cur <= end_date:
         yield cur

@@ -66,6 +66,7 @@ def run(
     total_days = (end_date - start_date).days + 1
     processed_days = 0
 
+    # UI/외부에서 콜백이 전달된 경우에만 상태 반영
     def emit_progress(value: int) -> None:
         if progress_callback:
             progress_callback(value)
@@ -79,6 +80,7 @@ def run(
             log_callback(message)
 
     try:
+        # Google Sheets 인증 및 서비스 생성
         emit_status("Google 인증")
         emit_log("Google 인증")
         emit_progress(20)
@@ -97,6 +99,7 @@ def run(
         raise
 
     try:
+        # 대상 스프레드시트 메타 정보 조회
         emit_status("시트 메타 조회")
         emit_log("시트 메타 조회")
         emit_progress(25)
@@ -126,6 +129,8 @@ def run(
         emit_status(f"{report_date} 다운로드/파싱")
         emit_log(f"{report_date} 다운로드 시작")
 
+        # 월별 시트 단위로 적재 데이터를 모으고,
+        # 해당 월에서 이번 실행 구간의 시작일/종료일도 함께 기록
         if sheet_title not in month_rows_map:
             month_rows_map[sheet_title] = []
             month_range_map[sheet_title] = {
@@ -155,6 +160,7 @@ def run(
             continue
 
         try:
+            # 다운로드한 CSV를 파싱해서 월별 적재 목록에 누적
             rows, parse_info = parse_keyword_report_csv(actual_save_path, report_date)
             month_rows_map[sheet_title].extend(rows)
             success_count += 1
@@ -166,6 +172,7 @@ def run(
             )
             emit_log(f"{report_date} parsed_rows={len(rows)}")
 
+            # 건너뛴 비정상 행이나 헤더 경고는 warning 로그로 남김
             if parse_info["skipped_invalid_rows"] > 0:
                 warning_msg = f"{report_date} skipped_invalid_rows={parse_info['skipped_invalid_rows']}"
                 logger.warning(f"WARN[DATE={report_date}] skipped_invalid_rows={parse_info['skipped_invalid_rows']}")
@@ -222,11 +229,13 @@ def run(
         exists = sheet_exists(metadata, sheet_title)
 
         if not exists:
+            # 월 시트가 없으면 새로 생성
             ensure_sheet(service, sheet_id, metadata, sheet_title, headers)
             refresh_sheet_metadata(service, sheet_id, metadata)
             logger.info(f"SHEET_CREATED[NAME={sheet_title}] 월 시트 생성 완료")
             emit_log(f"{sheet_title} 시트 생성 완료")
         else:
+            # 재실행 시에는 이번 실행 구간 날짜만 먼저 비움
             logger.info(f"SHEET_EXISTS[NAME={sheet_title}] 기존 월 시트 사용")
             emit_log(f"{sheet_title} 기존 시트 사용")
 
@@ -244,6 +253,7 @@ def run(
             )
             emit_log(f"{sheet_title} 값 비움 {cleared_count}행")
 
+            # 값만 비운 뒤 생긴 빈 행은 정리
             compacted_count = compact_sheet_rows(
                 service=service,
                 spreadsheet_id=sheet_id,
@@ -263,6 +273,7 @@ def run(
             continue
 
         try:
+            # 월별 누적 데이터 시트에 write
             write_rows(service, sheet_id, metadata, sheet_title, rows)
             logger.info(
                 f"SHEET_WRITE_OK[NAME={sheet_title}][START_DATE={month_start_report_date}][END_DATE={month_end_report_date}] "

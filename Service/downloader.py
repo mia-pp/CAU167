@@ -48,10 +48,12 @@ def download_with_retry(
     return:
         (성공 여부, 실제 저장된 파일 경로)
     """
+    # 저장 폴더가 없으면 생성
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
     for try_no in range(1, max_retries + 1):
         try:
+            # CSV 다운로드 요청
             resp = requests.get(url, timeout=30)
 
             if resp.status_code == 404:
@@ -64,6 +66,7 @@ def download_with_retry(
                 time.sleep(sleep_seconds)
                 continue
 
+            # 저장 가능한 실제 파일 경로 결정
             actual_save_path = _resolve_save_path(
                 logger=logger,
                 report_date=report_date,
@@ -76,6 +79,7 @@ def download_with_retry(
 
             actual_save_path.write_bytes(resp.content)
 
+            # 0바이트 파일이면 실패로 간주
             if actual_save_path.stat().st_size == 0:
                 log_fail(
                     logger,
@@ -88,6 +92,7 @@ def download_with_retry(
                 time.sleep(sleep_seconds)
                 continue
 
+            # 기본 파일명 저장인지, 대체 파일명 저장인지 구분해서 로그 기록
             if actual_save_path == save_path:
                 log_ok(logger, report_date, f"downloaded {actual_save_path.name}")
             else:
@@ -117,10 +122,12 @@ def _resolve_save_path(logger, report_date: str, try_no: int, save_path: Path) -
         return save_path
 
     try:
+        # 기존 파일이 있으면 삭제 후 동일 파일명 재사용
         save_path.unlink()
         return save_path
 
     except Exception as e:
+        # 기존 파일 삭제 실패 로그
         log_fail(
             logger,
             report_date,
@@ -130,6 +137,7 @@ def _resolve_save_path(logger, report_date: str, try_no: int, save_path: Path) -
             str(save_path),
         )
 
+        # 파일 잠금 등으로 삭제 불가하면 대체 파일명 사용
         alt_path = _build_alt_save_path(save_path)
 
         log_fail(

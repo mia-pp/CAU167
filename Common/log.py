@@ -23,6 +23,7 @@ def build_logger(log_dir: Path) -> logging.Logger:
     log_dir 하위에 날짜별 로그 파일 생성
     예: log_20260311.log
     """
+    # 로그 폴더가 없으면 생성
     log_dir.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger(LOGGER_NAME)
@@ -34,16 +35,18 @@ def build_logger(log_dir: Path) -> logging.Logger:
             logger.removeHandler(handler)
             handler.close()
 
+    # 상위 로거로 전파되지 않도록 설정
     logger.propagate = False
 
     log_file_path = log_dir / f"{LOG_FILE_PREFIX}{_today_yyyymmdd()}.log"
-
     formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 
+    # 파일 로그 저장용 핸들러
     file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
 
+    # 콘솔 출력용 핸들러
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
     stream_handler.setFormatter(formatter)
@@ -55,6 +58,7 @@ def build_logger(log_dir: Path) -> logging.Logger:
 
 
 def log_ok(logger: logging.Logger, report_date: str, message: str) -> None:
+    # 정상 처리 로그 기록
     logger.info(f"OK[DATE={report_date}] {message}")
 
 
@@ -66,6 +70,7 @@ def log_fail(
     message: str,
     extra: str = "",
 ) -> None:
+    # 실패 로그 기록
     if extra:
         logger.error(f"FAIL[DATE={report_date}][CODE={code}][TRY={try_no}] {message} | {extra}")
     else:

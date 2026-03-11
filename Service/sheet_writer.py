@@ -3,14 +3,9 @@ sheet_writer.py
 - Google Sheets API(v4) 기반 시트 생성/헤더 세팅/데이터 write
 - 월별 시트 생성 규칙:
   1) 전달(이전 월) 시트가 있으면:
-     - 전달 오른쪽에 새 시트 생성
-     - 전달의 1행 서식만 복사
-     - 헤더 입력
-     - 1행 고정
+     - 전달 오른쪽에 새 시트 생성 > 전달의 1행 서식만 복사 > 헤더 입력 > 1행 고정
   2) 전달 시트가 없으면:
-     - 마지막 월시트 오른쪽에 새 시트 생성
-     - 헤더 입력
-     - 1행 고정
+     - 마지막 월시트 오른쪽에 새 시트 생성 > 헤더 입력 > 1행 고정
 - 재실행 시 실행 구간(start_date ~ end_date)에 해당하는 데이터만 clear
 - clear 후 빈행 정리(compact) 수행
 - 데이터 입력은 values.update 방식으로 처리
@@ -49,6 +44,7 @@ VALUE_COLUMN_MAX_WIDTH = 400
 
 
 def build_sheets_service(creds):
+    # Google Sheets API 서비스 객체 생성
     return build("sheets", "v4", credentials=creds, cache_discovery=False)
 
 
@@ -88,6 +84,7 @@ def fetch_sheet_metadata(service, spreadsheet_id: str) -> Dict[str, Any]:
 
 
 def refresh_sheet_metadata(service, spreadsheet_id: str, metadata: Dict[str, Any]) -> None:
+    # 시트 생성/변경 후 메타 캐시 갱신
     refreshed = fetch_sheet_metadata(service, spreadsheet_id)
     metadata.clear()
     metadata.update(refreshed)
@@ -108,6 +105,7 @@ def ensure_sheet(
     시트가 없으면 생성한다.
     """
     if sheet_exists(metadata, sheet_title):
+        # 이미 있으면 1행 고정만 보장
         sheet_id = metadata["by_title"][sheet_title]["sheet_id"]
         _freeze_first_row(service, spreadsheet_id, sheet_id)
         return
@@ -115,6 +113,8 @@ def ensure_sheet(
     prev_title = _get_prev_month_title(sheet_title)
     prev_exists = prev_title is not None and sheet_exists(metadata, prev_title)
 
+    # 전달 시트가 있으면 전달 오른쪽,
+    # 없으면 마지막 월시트 오른쪽에 새 시트 생성
     if prev_exists:
         insert_index = metadata["by_title"][prev_title]["index"] + 1
     else:
@@ -134,6 +134,7 @@ def ensure_sheet(
 
     refresh_sheet_metadata(service, spreadsheet_id, metadata)
 
+    # 전달 시트가 있으면 1행 서식만 복사
     if prev_exists:
         prev_sheet_id = metadata["by_title"][prev_title]["sheet_id"]
         _copy_first_row_format(
@@ -143,6 +144,7 @@ def ensure_sheet(
             destination_sheet_id=new_sheet_id,
         )
 
+    # 헤더 입력
     service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
         range=f"{sheet_title}!A1:{LAST_COLUMN_LETTER}1",
@@ -150,6 +152,7 @@ def ensure_sheet(
         body={"values": [headers]},
     ).execute()
 
+    # 1행 고정
     _freeze_first_row(service, spreadsheet_id, new_sheet_id)
 
 
@@ -168,6 +171,7 @@ def write_rows(
 
     sheet_id = metadata["by_title"][sheet_title]["sheet_id"]
 
+    # 현재 마지막 데이터 행 다음부터 이어서 입력
     last_data_row = _get_last_data_row(
         service=service,
         spreadsheet_id=spreadsheet_id,
@@ -180,6 +184,7 @@ def write_rows(
     end_row = start_row + len(rows) - 1
     target_range = f"{sheet_title}!A{start_row}:{LAST_COLUMN_LETTER}{end_row}"
 
+    # 필요한 경우 시트 row 수 확장
     _ensure_row_capacity(
         service=service,
         spreadsheet_id=spreadsheet_id,
@@ -195,6 +200,7 @@ def write_rows(
         body={"values": rows},
     ).execute()
 
+    # write 후 정렬/테두리/열 너비 후처리
     _finalize_sheet_layout(
         service=service,
         spreadsheet_id=spreadsheet_id,
@@ -229,6 +235,7 @@ def clear_rows_in_date_range(
 
     matching_rows = []
 
+    # A열 날짜를 기준으로 clear 대상 행 찾기
     for index, row in enumerate(values, start=FIRST_DATA_ROW):
         if not row or not row[0]:
             continue
@@ -240,6 +247,7 @@ def clear_rows_in_date_range(
     if not matching_rows:
         return 0
 
+    # 연속 행은 묶어서 batchClear 범위 최소화
     row_ranges = _compress_row_ranges(matching_rows)
 
     clear_ranges = []
@@ -382,6 +390,7 @@ def _finalize_sheet_layout(
         sheet_title=sheet_title,
     )
 
+    # A열(report_date) 기준 오름차순 정렬
     if last_data_row >= FIRST_DATA_ROW:
         _sort_by_report_date(
             service=service,
@@ -399,6 +408,7 @@ def _finalize_sheet_layout(
         sheet_title=sheet_title,
     )
 
+    # 데이터 영역 전체 테두리 적용
     if last_data_row >= FIRST_DATA_ROW:
         _apply_data_borders(
             service=service,
@@ -410,6 +420,7 @@ def _finalize_sheet_layout(
             end_column_index=LAST_COLUMN_INDEX,
         )
 
+    # A:G 기본 열 너비 적용
     _set_columns_width(
         service=service,
         spreadsheet_id=spreadsheet_id,
@@ -419,6 +430,7 @@ def _finalize_sheet_layout(
         pixel_size=DEFAULT_COLUMN_WIDTH,
     )
 
+    # E열(value)만 auto resize 후 최소/최대 너비 보정
     _auto_resize_columns(
         service=service,
         spreadsheet_id=spreadsheet_id,
@@ -452,6 +464,7 @@ def _finalize_sheet_layout(
 
 
 def _compress_row_ranges(row_numbers: List[int]) -> List[tuple]:
+    # 연속된 행 번호를 start/end 범위로 압축
     if not row_numbers:
         return []
 
@@ -475,6 +488,7 @@ def _compress_row_ranges(row_numbers: List[int]) -> List[tuple]:
 
 
 def _get_last_data_row(service, spreadsheet_id: str, sheet_title: str) -> int:
+    # A열 기준 마지막 사용 행 번호 반환
     values_resp = service.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id,
         range=f"{sheet_title}!A:A",
@@ -491,6 +505,7 @@ def _ensure_row_capacity(
     sheet_title: str,
     required_last_row: int,
 ) -> None:
+    # 필요한 마지막 행이 현재 row 수를 넘으면 시트 row 확장
     current_row_count = metadata["by_title"][sheet_title]["row_count"]
 
     if required_last_row <= current_row_count:
@@ -523,6 +538,7 @@ def _ensure_row_capacity(
 
 
 def _get_prev_month_title(sheet_title: str) -> Optional[str]:
+    # YYYY.MM 기준 전달 시트명 계산
     try:
         yyyy_str, mm_str = sheet_title.split(".")
         yyyy = int(yyyy_str)
@@ -537,6 +553,7 @@ def _get_prev_month_title(sheet_title: str) -> Optional[str]:
 
 
 def _get_last_month_sheet_title(metadata: Dict[str, Any]) -> Optional[str]:
+    # 현재 스프레드시트 안의 마지막 월시트명 조회
     month_titles = []
 
     for title in metadata["by_title"].keys():
@@ -551,6 +568,7 @@ def _get_last_month_sheet_title(metadata: Dict[str, Any]) -> Optional[str]:
 
 
 def _is_month_sheet_title(title: str) -> bool:
+    # YYYY.MM 형식의 월시트명인지 확인
     parts = title.split(".")
     if len(parts) != 2:
         return False
@@ -573,6 +591,7 @@ def _add_sheet(
     sheet_title: str,
     insert_index: int,
 ) -> int:
+    # 지정한 위치(index)에 새 시트 생성
     body = {
         "requests": [
             {
@@ -601,6 +620,7 @@ def _copy_first_row_format(
     source_sheet_id: int,
     destination_sheet_id: int,
 ) -> None:
+    # 전달 시트의 1행 서식만 복사
     body = {
         "requests": [
             {
@@ -629,6 +649,7 @@ def _copy_first_row_format(
 
 
 def _freeze_first_row(service, spreadsheet_id: str, sheet_id: int) -> None:
+    # 헤더 행(1행) 고정
     body = {
         "requests": [
             {
@@ -660,6 +681,7 @@ def _sort_by_report_date(
     start_column_index: int,
     end_column_index: int,
 ) -> None:
+    # 데이터 영역을 A열(report_date) 기준 오름차순 정렬
     body = {
         "requests": [
             {
@@ -697,6 +719,7 @@ def _apply_data_borders(
     start_column_index: int,
     end_column_index: int,
 ) -> None:
+    # 데이터 영역 전체에 테두리 적용
     body = {
         "requests": [
             {
@@ -732,6 +755,7 @@ def _auto_resize_columns(
     start_column_index: int,
     end_column_index: int,
 ) -> None:
+    # 지정 열 구간 auto resize
     body = {
         "requests": [
             {
@@ -761,6 +785,7 @@ def _set_columns_width(
     end_column_index: int,
     pixel_size: int,
 ) -> None:
+    # 지정 열 구간 너비를 동일하게 설정
     body = {
         "requests": [
             {
@@ -793,6 +818,7 @@ def _set_column_width(
     column_index: int,
     pixel_size: int,
 ) -> None:
+    # 단일 열 너비 설정
     body = {
         "requests": [
             {
@@ -823,6 +849,7 @@ def _get_column_width(
     spreadsheet_id: str,
     sheet_id: int,
 ) -> int:
+    # 현재 E열(value)의 실제 너비 조회
     response = service.spreadsheets().get(
         spreadsheetId=spreadsheet_id,
         includeGridData=True,

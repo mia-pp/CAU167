@@ -35,19 +35,23 @@ class MainWindow(QMainWindow):
         ui_path = resource_dir / "main.ui"
         icon_path = resource_dir / "icon.ico"
 
+        # Qt Designer UI 로드
         uic.loadUi(str(ui_path), self)
 
+        # 아이콘 파일이 있으면 창 아이콘 적용
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
         self.base_dir = get_base_dir()
         self.config = load_config(self.base_dir)
 
+        # 실행 상태 및 로그 추적용 변수
         self.process = None
         self.is_running = False
         self.last_log_position = 0
         self.last_ui_log_line = ""
 
+        # 주기적으로 최신 로그 파일을 읽어 UI에 반영
         self.log_poll_timer = QTimer(self)
         self.log_poll_timer.timeout.connect(self.read_latest_log_lines)
 
@@ -55,12 +59,14 @@ class MainWindow(QMainWindow):
         self._connect_signals()
 
     def _setup_ui(self) -> None:
+        # 기본 날짜는 전날로 설정
         today = QDate.currentDate()
         yesterday = today.addDays(-1)
 
         self.date_start.setDate(yesterday)
         self.date_end.setDate(yesterday)
 
+        # 실행 전 UI 기본 상태
         self.label_status.setText("상태: 대기중")
         self.label_current_task.setText("현재 작업: -")
         self.label_success_count.setText("성공: 0건")
@@ -72,12 +78,14 @@ class MainWindow(QMainWindow):
         self.btn_run.setEnabled(True)
 
     def _connect_signals(self) -> None:
+        # 버튼 이벤트 연결
         self.btn_run.clicked.connect(self.run_process)
         self.btn_reset.clicked.connect(self.reset_ui)
         self.btn_open_log_folder.clicked.connect(self.open_log_folder)
         self.btn_open_download_folder.clicked.connect(self.open_download_folder)
 
     def run_process(self) -> None:
+        # 중복 실행 방지
         if self.is_running:
             QMessageBox.warning(self, "실행중", "이미 실행 중입니다.")
             return
@@ -88,6 +96,7 @@ class MainWindow(QMainWindow):
         start_date = self.date_start.date().toString("yyyy-MM-dd")
         end_date = self.date_end.date().toString("yyyy-MM-dd")
 
+        # 실행 시작 시 UI 초기화
         self.text_result.clear()
         self.text_log.clear()
         self.label_status.setText("상태: 실행중")
@@ -101,6 +110,7 @@ class MainWindow(QMainWindow):
         self.last_ui_log_line = ""
         self.last_log_position = self._get_current_log_file_size()
 
+        # main.py를 별도 프로세스로 실행
         self.process = QProcess(self)
         self.process.setProgram(sys.executable)
         self.process.setWorkingDirectory(str(self.base_dir))
@@ -121,6 +131,7 @@ class MainWindow(QMainWindow):
         self.append_log(f"프로세스 시작: {sys.executable} main.py {start_date} {end_date}")
 
     def reset_ui(self) -> None:
+        # 실행 중에는 초기화 차단
         if self.is_running:
             QMessageBox.warning(self, "실행중", "실행 중에는 초기화할 수 없습니다.")
             return
@@ -134,6 +145,7 @@ class MainWindow(QMainWindow):
         self._open_folder(self.base_dir / self.config["downloads_dir"])
 
     def _open_folder(self, folder_path: Path) -> None:
+        # 폴더가 없으면 생성 후 OS에 맞게 열기
         folder_path.mkdir(parents=True, exist_ok=True)
 
         if sys.platform.startswith("win"):
@@ -144,6 +156,7 @@ class MainWindow(QMainWindow):
             os.system(f'xdg-open "{folder_path}"')
 
     def _validate_dates(self) -> bool:
+        # UI 입력 날짜 검증
         start_qdate = self.date_start.date()
         end_qdate = self.date_end.date()
         today = QDate.currentDate()
@@ -184,6 +197,7 @@ class MainWindow(QMainWindow):
                 if not line:
                     continue
 
+                # UI에 보여줄 핵심 로그만 통과
                 if not should_display_log_line(line):
                     continue
 
@@ -248,6 +262,7 @@ class MainWindow(QMainWindow):
         self.progress_run.setValue(self._round_to_5(progress))
 
     def _round_to_5(self, value: int) -> int:
+        # 진행률을 5 단위로 보정
         rounded = int(round(value / 5.0) * 5)
         if rounded < 0:
             return 0
@@ -256,6 +271,7 @@ class MainWindow(QMainWindow):
         return rounded
 
     def _get_latest_log_file(self):
+        # 가장 최신 로그 파일 조회
         log_dir = self.base_dir / self.config["log_dir"]
         if not log_dir.exists():
             return None
@@ -267,6 +283,7 @@ class MainWindow(QMainWindow):
         return log_files[-1]
 
     def _get_current_log_file_size(self) -> int:
+        # 현재 로그 파일 크기를 기억해 이후 추가된 로그만 읽도록 처리
         latest_log = self._get_latest_log_file()
         if latest_log is None or not latest_log.exists():
             return 0
@@ -277,6 +294,7 @@ class MainWindow(QMainWindow):
             return 0
 
     def _update_counts_from_log_file(self) -> None:
+        # 최신 로그에서 최종 success/fail 건수 추출
         latest_log = self._get_latest_log_file()
         if latest_log is None:
             return
@@ -307,6 +325,7 @@ class MainWindow(QMainWindow):
             self.append_log(f"로그 카운트 읽기 오류: {e}")
 
     def _get_last_error_from_log_file(self) -> str:
+        # 최신 로그에서 마지막 에러 메시지 조회
         latest_log = self._get_latest_log_file()
         if latest_log is None:
             return ""
@@ -325,6 +344,7 @@ class MainWindow(QMainWindow):
         return ""
 
     def on_process_finished(self, exit_code: int, exit_status) -> None:
+        # 프로세스 정상/비정상 종료 후 UI 상태 갱신
         self.log_poll_timer.stop()
 
         self.is_running = False
@@ -350,6 +370,7 @@ class MainWindow(QMainWindow):
         self.process = None
 
     def on_process_error(self, error) -> None:
+        # 프로세스 실행 자체가 실패한 경우
         self.log_poll_timer.stop()
 
         self.is_running = False
@@ -359,6 +380,7 @@ class MainWindow(QMainWindow):
         self.append_log(f"프로세스 실행 오류: {error}")
 
     def append_log(self, message: str) -> None:
+        # 같은 로그가 연속으로 들어오면 중복 표시하지 않음
         if not message:
             return
 
@@ -372,6 +394,7 @@ class MainWindow(QMainWindow):
         self.text_result.append(message)
 
     def closeEvent(self, event) -> None:
+        # 실행 중에는 창 닫기 차단
         if self.is_running:
             QMessageBox.warning(self, "실행중", "작업이 끝난 후 창을 닫아주세요.")
             event.ignore()
