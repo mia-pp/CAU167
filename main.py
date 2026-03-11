@@ -6,9 +6,12 @@ main.py
 - 기존 엔진 구조(Function / Service / Config / Auth / Log)는 그대로 유지
 """
 
-import knw_license
-
+import os
 import sys
+
+# macOS에서는 knw_license.pyd를 사용할 수 없으므로 import 생략
+if sys.platform != "darwin":
+    import knw_license
 
 from PyQt5.QtWidgets import QApplication
 

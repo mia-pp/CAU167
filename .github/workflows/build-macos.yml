@@ -1,0 +1,128 @@
+name: Build macOS DMG
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14  # Apple Silicon (arm64)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check project files
+        run: |
+          set -euo pipefail
+          test -f main.py
+          test -f Resource/main.ui
+          test -f Config/google_sheet_config.json
+          echo "Project files check OK"
+
+      - name: Build app with PyInstaller
+        run: |
+          set -euo pipefail
+
+          pyinstaller \
+            --noconfirm \
+            --clean \
+            --windowed \
+            --name CAU167 \
+            --distpath dist \
+            --workpath build \
+            --add-data "Resource:Resource" \
+            --add-data "Function:Function" \
+            --add-data "Common:Common" \
+            --add-data "Service:Service" \
+            --hidden-import PyQt5.sip \
+            main.py
+
+      - name: Detect built app path
+        id: find_app
+        run: |
+          set -euo pipefail
+          APP=$(find dist -type d -name "CAU167.app" | head -n1)
+          [ -n "${APP:-}" ] || { echo "No .app found in dist"; exit 1; }
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          echo "Found app: $APP"
+
+      - name: Prepare DMG folder structure
+        run: |
+          set -euo pipefail
+
+          APP="${{ steps.find_app.outputs.app }}"
+
+          rm -rf package_root dmg_src
+          mkdir -p package_root/CAU167
+          mkdir -p dmg_src
+
+          # .app 복사
+          /usr/bin/ditto "$APP" "package_root/CAU167/CAU167.app"
+
+          # 외부 Config 폴더 복사
+          mkdir -p package_root/CAU167/Config
+          /usr/bin/ditto "Config" "package_root/CAU167/Config"
+
+          # 사용자 안내용 README
+          cat > package_root/CAU167/README.txt << 'EOF'
+          [CAU167 macOS 실행 안내]
+
+          1. CAU167 폴더 전체를 원하는 위치로 복사하세요.
+          2. CAU167.app을 실행하세요.
+          3. 최초 Google 인증 시 Auth 폴더와 token.json이 자동 생성될 수 있습니다.
+          4. Log, downloads 폴더는 실행 중 자동 생성됩니다.
+
+          주의:
+          - CAU167.app만 따로 옮기지 말고, Config 폴더와 같은 위치를 유지하세요.
+          EOF
+
+          # DMG 소스 구성
+          /usr/bin/ditto "package_root" "dmg_src"
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+
+          DMG_NAME="CAU167-macOS-arm64.dmg"
+          VOL_NAME="CAU167"
+
+          rm -f "$DMG_NAME"
+
+          hdiutil create \
+            -volname "$VOL_NAME" \
+            -srcfolder "dmg_src" \
+            -ov \
+            -format UDZO \
+            "$DMG_NAME"
+
+          echo "Created $DMG_NAME"
+
+      - name: Upload DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAU167-macOS-arm64-DMG
+          path: CAU167-macOS-arm64.dmg
+          if-no-files-found: error
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf build dist package_root dmg_src
