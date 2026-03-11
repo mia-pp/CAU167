@@ -1,0 +1,40 @@
+# --- Secrets / OAuth ---
+Auth/
+**/token.json
+**/client_secret*.json
+
+# --- Logs ---
+Log/
+*.log
+
+# --- IDE ---
+.idea/
+.vscode/
+
+# --- Python cache ---
+__pycache__/
+*.pyc
+*.pyo
+
+# --- Virtualenv / local python env ---
+pyvenv.cfg
+Lib/
+Scripts/
+Include/
+*.dist-info/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Build outputs (exe 등) ---
+dist/
+build/
+*.spec
+obf_src/
+
+# --- Auto-generated folders ---
+downloads/
+
+# --- Internal binary (policy-dependent) ---
+knw_license.pyd
