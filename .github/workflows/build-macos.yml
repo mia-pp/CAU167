@@ -54,7 +54,6 @@ jobs:
             --workpath build \
             --add-data "Resource:Resource" \
             --hidden-import PyQt5.sip \
-          
             main.py
 
       # 6) Find built .app
