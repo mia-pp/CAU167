@@ -1,5 +1,7 @@
 # --- Secrets / OAuth ---
-Auth/
+Auth/*
+!Auth/.gitkeep
+!Auth/
 **/token.json
 **/client_secret*.json
 
