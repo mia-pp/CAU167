@@ -2,6 +2,7 @@
 Service/downloader.py
 - 날짜별 URL 템플릿에 date(YYYY-MM-DD)만 치환해서 CSV 다운로드
 - 실패 사유코드 로그 기록 + 재시도(MAX_RETRIES) 수행
+  - 단, 404 응답은 재시도 없이 즉시 실패 반환 (파일이 없는 날짜는 재시도 무의미)
 - 기존 파일이 잠겨 있거나 삭제 실패하면 대체 파일명으로 저장
 - 실제 저장된 파일 경로를 반환하여, 그 파일로 바로 파싱/업로드할 수 있게 처리
 """
@@ -57,9 +58,9 @@ def download_with_retry(
             resp = requests.get(url, timeout=30)
 
             if resp.status_code == 404:
+                # 404는 재시도해도 파일이 없으므로 즉시 실패 반환
                 log_fail(logger, report_date, CODE_HTTP_404, try_no, "file not found", url)
-                time.sleep(sleep_seconds)
-                continue
+                return False, None
 
             if resp.status_code != 200:
                 log_fail(logger, report_date, CODE_HTTP_ERROR, try_no, f"status={resp.status_code}", url)
@@ -73,9 +74,6 @@ def download_with_retry(
                 try_no=try_no,
                 save_path=save_path,
             )
-            if actual_save_path is None:
-                time.sleep(sleep_seconds)
-                continue
 
             actual_save_path.write_bytes(resp.content)
 
@@ -111,12 +109,13 @@ def download_with_retry(
     return False, None
 
 
-def _resolve_save_path(logger, report_date: str, try_no: int, save_path: Path) -> Optional[Path]:
+def _resolve_save_path(logger, report_date: str, try_no: int, save_path: Path) -> Path:
     """
     저장 경로 결정
     - 기본 파일이 없으면 그대로 사용
     - 기본 파일이 있으면 삭제 시도
     - 삭제 실패하면 대체 파일명 생성
+    항상 유효한 Path를 반환한다 (None 없음)
     """
     if not save_path.exists():
         return save_path

@@ -17,13 +17,13 @@ from Function.date_util import daterange
 from Service.downloader import download_with_retry
 from Service.google_oauth import get_credentials
 from Service.sheet_writer import build_sheets_service
+from Service.sheet_writer import clear_rows_in_date_range
+from Service.sheet_writer import compact_sheet_rows
 from Service.sheet_writer import ensure_sheet
 from Service.sheet_writer import fetch_sheet_metadata
 from Service.sheet_writer import refresh_sheet_metadata
 from Service.sheet_writer import sheet_exists
 from Service.sheet_writer import write_rows
-from Service.sheet_writer import clear_rows_in_date_range
-from Service.sheet_writer import compact_sheet_rows
 
 
 # ==============================
@@ -60,6 +60,9 @@ def run(
     downloads_dir = base_dir / downloads_dir_name
     downloads_dir.mkdir(parents=True, exist_ok=True)
 
+    # success_count: CSV 파싱 성공 날짜 수 (다운로드 + 파싱 모두 성공)
+    # fail_count:    날짜 단위 실패 수 (다운로드 실패 또는 파싱 실패)
+    #                + 월별 시트 write 실패 수 (중복 집계 가능성 있음, 로그로 상세 추적)
     success_count = 0
     fail_count = 0
 
@@ -279,7 +282,11 @@ def run(
                 f"SHEET_WRITE_OK[NAME={sheet_title}][START_DATE={month_start_report_date}][END_DATE={month_end_report_date}] "
                 f"written_rows={len(rows)}"
             )
-            emit_log(f"{sheet_title} written_rows={len(rows)}")
+            # UI 필터(should_display_log_line)가 SHEET_WRITE_OK 키워드로 통과하므로
+            # emit_log도 동일한 형식으로 맞춤
+            emit_log(
+                f"SHEET_WRITE_OK[NAME={sheet_title}] written_rows={len(rows)}"
+            )
         except Exception as e:
             fail_count += 1
             log_fail(

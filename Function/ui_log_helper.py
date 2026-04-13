@@ -18,7 +18,6 @@ def should_display_log_line(line: str) -> bool:
         "SHEET_EXISTS",
         "SHEET_CLEARED",
         "SHEET_COMPACTED",
-        "SHEET_TRUNCATED",
         "SHEET_WRITE_OK",
         "DONE success_count=",
         "FAIL[",
@@ -101,14 +100,6 @@ def normalize_log_line(line: str) -> str:
         compacted_rows = extract_value_after_keyword(cleaned, "removed_blank_rows=")
         if sheet_name and compacted_rows:
             return f"{sheet_name} 빈행 정리 {compacted_rows}행"
-        return cleaned
-
-    # 기존 데이터 삭제 로그 변환
-    if "SHEET_TRUNCATED" in cleaned:
-        sheet_name = extract_value_in_brackets(cleaned, "NAME")
-        deleted_rows = extract_value_after_keyword(cleaned, "deleted_rows=")
-        if sheet_name and deleted_rows:
-            return f"{sheet_name} 기존 데이터 삭제 {deleted_rows}행"
         return cleaned
 
     # 시트 적재 완료 로그 변환

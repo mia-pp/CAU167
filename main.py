@@ -9,6 +9,12 @@ main.py
 import os
 import sys
 
+
+# ==============================
+# Constants
+# ==============================
+APP_VERSION = "1.1"  # 버전 변경 시 이 한 줄만 수정
+
 # macOS에서는 knw_license.pyd를 사용할 수 없으므로 import 생략
 if sys.platform != "darwin":
     import knw_license
@@ -53,7 +59,8 @@ def run_console() -> None:
 
         logger.info(
             f"DONE success_count={summary.get('success_count', 0)} "
-            f"fail_count={summary.get('fail_count', 0)}"
+            f"fail_count={summary.get('fail_count', 0)} "
+            f"version={APP_VERSION}"
         )
 
     except Exception as e:

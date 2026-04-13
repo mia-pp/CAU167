@@ -8,6 +8,8 @@ sheet_writer.py
      - 마지막 월시트 오른쪽에 새 시트 생성 > 헤더 입력 > 1행 고정
 - 재실행 시 실행 구간(start_date ~ end_date)에 해당하는 데이터만 clear
 - clear 후 빈행 정리(compact) 수행
+  - compact 시 API 읽기로 반환된 str 값 중 숫자 컬럼(key, count)을 int로 재변환 후 write
+    (재write 시 ' 접두사 문제 방지)
 - 데이터 입력은 values.update 방식으로 처리
 - write 후:
   - 기존 데이터 아래 다음 행부터 이어서 입력
@@ -41,6 +43,35 @@ DEFAULT_COLUMN_WIDTH = 100
 VALUE_COLUMN_INDEX = 4
 VALUE_COLUMN_MIN_WIDTH = 100
 VALUE_COLUMN_MAX_WIDTH = 400
+
+# 시트 컬럼별 타입 정의 (0-based index)
+# A(0): report_date - str
+# B(1): collection  - str
+# C(2): key         - int ← 숫자
+# D(3): target      - str
+# E(4): value       - str
+# F(5): tag         - str
+# G(6): count       - int ← 숫자
+_INT_COLUMNS = {2, 6}
+
+
+def _normalize_row_types(row: List[Any]) -> List[Any]:
+    """
+    Google Sheets API values().get()은 모든 값을 str로 반환한다.
+    compact_sheet_rows 등에서 읽어 다시 write할 때 숫자 컬럼(key, count)을
+    int로 변환하지 않으면 ' 접두사가 붙은 문자열로 재적재되는 문제 방지.
+    변환 불가한 값은 원본 그대로 유지한다.
+    """
+    result = []
+    for i, val in enumerate(row):
+        if i in _INT_COLUMNS:
+            try:
+                result.append(int(str(val).strip()))
+            except (ValueError, TypeError):
+                result.append(val)
+        else:
+            result.append(val)
+    return result
 
 
 def build_sheets_service(creds):
@@ -296,7 +327,13 @@ def compact_sheet_rows(
         return 0
 
     original_count = len(all_rows)
-    compacted_rows = [row for row in all_rows if _has_any_value(row)]
+    # 빈 행 제거 + 숫자 컬럼 타입 정규화
+    # (API 읽기 시 모든 값이 str로 반환되므로 재write 전 int 변환 필요)
+    compacted_rows = [
+        _normalize_row_types(row)
+        for row in all_rows
+        if _has_any_value(row)
+    ]
     compacted_count = len(compacted_rows)
     removed_blank_count = original_count - compacted_count
 

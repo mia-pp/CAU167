@@ -248,10 +248,6 @@ class MainWindow(QMainWindow):
             progress = min(max(progress + 5, 85), 92)
             self.label_current_task.setText("현재 작업: 빈행 정리")
 
-        elif "기존 데이터 삭제" in line:
-            progress = min(max(progress + 5, 80), 90)
-            self.label_current_task.setText("현재 작업: 기존 데이터 정리")
-
         elif "시트 적재 완료" in line:
             progress = min(max(progress + 5, 90), 95)
             self.label_current_task.setText("현재 작업: 시트 적재")
@@ -275,7 +271,8 @@ class MainWindow(QMainWindow):
         if not log_dir.exists():
             return None
 
-        log_files = sorted(log_dir.glob("log_*.log"))
+        # 파일명 기준 정렬 (log_YYYYMMDD.log 형식이므로 파일명순 = 날짜순)
+        log_files = sorted(log_dir.glob("log_*.log"), key=lambda p: p.name)
         if not log_files:
             return None
 
@@ -341,6 +338,9 @@ class MainWindow(QMainWindow):
 
     def on_process_finished(self, exit_code: int, exit_status) -> None:
         self.log_poll_timer.stop()
+        # 프로세스 종료 직후 기록된 로그(DONE 등)가 폴링 타이밍에 따라 누락될 수 있으므로
+        # 타이머 중단 후 마지막으로 한 번 더 읽어 flush
+        self.read_latest_log_lines()
 
         self.is_running = False
         self.btn_run.setEnabled(True)

@@ -5,8 +5,10 @@ Function/csv_util.py
 - CSV의 A열(숫자)은 버리고, 구글시트 A열에는 report_date(YYYY-MM-DD)를 넣는다
 - CSV의 D열(name)은 구글시트에 적재하지 않는다
 - 인코딩 자동 fallback: utf-8-sig → utf-8 → euc-kr
+- 숫자 컬럼(key, count)은 int로 변환하여 반환
+  (str 그대로 전달 시 Google Sheets가 ' 접두사를 붙여 문자열로 저장되는 문제 방지)
 - 출력 row 형식:
-  [report_date, collection, key, target, value, tag, count]
+  [report_date, collection, key(int), target, value, tag, count(int)]
 """
 
 import csv
@@ -83,14 +85,16 @@ def _parse_with_encoding(
             # CSV A열(No) 제거
             # CSV D열(name) 제거
             # 구글시트 A열에는 report_date 삽입
+            # C열(key), H열(count)는 숫자 컬럼 → int 변환
+            # (str 그대로 전달 시 Google Sheets가 ' 접두사를 붙여 문자열로 저장)
             out = [
                 report_date,
                 r[1],
-                r[2],
+                _to_int(r[2]),
                 r[4],
                 r[5],
                 r[6],
-                r[7],
+                _to_int(r[7]),
             ]
             rows.append(out)
 
@@ -100,6 +104,15 @@ def _parse_with_encoding(
         "warnings": warnings,
     }
     return rows, parse_info
+
+
+def _to_int(value: str) -> Any:
+    # 숫자 문자열을 int로 변환
+    # 변환 불가한 값은 원본 문자열 그대로 반환
+    try:
+        return int(str(value).strip())
+    except (ValueError, TypeError):
+        return value
 
 
 def _is_expected_header(normalized_header: List[str]) -> bool:
