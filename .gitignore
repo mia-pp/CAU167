@@ -40,3 +40,10 @@ downloads/
 
 # --- Internal binary (policy-dependent) ---
 knw_license.pyd
+
+# 문서 파일
+*.pptx
+
+# 배포 산출물
+*.zip
+*.dmg
